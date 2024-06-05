@@ -5,7 +5,11 @@ from player import *
 class QLearningAIPlayer(player):
     
     def __init__(self, name, playerColor, learning_rate=0.1, discount_factor=0.9, exploration_rate=0.1):
-        super().__init__(name, playerColor)  # Initialize parent class attributes
+        
+        # needs to be moved to some other function once we create the functions to run more, just here for now
+        super().__init__(name, playerColor)
+        
+        
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.exploration_rate = exploration_rate
@@ -21,53 +25,101 @@ class QLearningAIPlayer(player):
         self.resources = {'ORE':0, 'BRICK':4, 'WHEAT':2, 'WOOD':4, 'SHEEP':2} #Dictionary that keeps track of resource amounts
         print("Added new AI Player:", self.name)
     
+    def get_initial_setup_state(self, board):
+        resources_list = []
+        coords_list = []
+
+        for index, hex_tile in board.hexTileDict.items():
+            # Extract resource and coord attributes from each hexTile object
+            resource = hex_tile.resource
+            coord = hex_tile.coord
+        
+            # Append extracted attributes to respective lists
+            resources_list.append(resource)
+            coords_list.append(coord)
+    
+        # Convert lists to tuples
+        self.resources_tuple = tuple(resources_list)
+        self.coords_tuple = tuple(coords_list)
+
+        ports_list = []
+        is_colonised_list = []
+    
+        # Iterate over the dictionary containing hexTile.Vertex objects
+        for vertex, hex_vertex in board.boardGraph.items():
+            # Extract port and isColonised attributes from each hexTile.Vertex object
+            port = hex_vertex.port
+            is_colonised = hex_vertex.isColonised
+        
+            #  Append extracted attributes to respective lists
+            ports_list.append(port)
+            is_colonised_list.append(is_colonised)
+        # Convert lists to tuples
+        ports_tuple = tuple(ports_list)
+        is_colonised_tuple = tuple(is_colonised_list)
+
+        state = (
+        self.settlementsLeft,
+        self.roadsLeft,
+        self.citiesLeft,
+        self.resources_tuple,
+        self.coords_tuple,
+        tuple(self.resources.values()),
+        self.knightsPlayed,
+        self.maxRoadLength,
+        self.victoryPoints,
+        self.longestRoadFlag,
+        self.largestArmyFlag,
+        ports_tuple, 
+        is_colonised_tuple,
+        # again need to do something about the board
+    )
+
     def initial_setup(self, board):
         #Build random settlement
+        possible_actions = {}
+        state = self.get_initial_setup_state(board)
         possibleVertices = board.get_setup_settlements(self)
+        settlement_commands = self.get_settlement_build_commands(possibleVertices)
+        possible_actions.update(settlement_commands)
+        action_index = self.initial_choose_action(state, board, possible_actions)
+        action_key = self.index_to_action_key[action_index]
+        action_value = possible_actions[action_key]
+        print(f"Chosen action: {action_key} with value {action_value}")
+        self.build_settlement(action_value, board)
 
-        #Simple heuristic for choosing initial spot
-        diceRoll_expectation = {2:1, 3:2, 4:3, 5:4, 6:5, 8:5, 9:4, 10:3, 11:2, 12:1, None:0}
-        vertexValues = []
+        reward = self.calculate_reward()
+        next_state = self.get_state(board)
+        self.update_q_table(state, action_index, reward, next_state, board)
 
-        #Get the adjacent hexes for each hex
-        for v in possibleVertices.keys():
-            vertexNumValue = 0
-            resourcesAtVertex = []
-            #For each adjacent hex get its value and overall resource diversity for that vertex
-            for adjacentHex in board.boardGraph[v].adjacentHexList:
-                resourceType = board.hexTileDict[adjacentHex].resource.type
-                if(resourceType not in resourcesAtVertex):
-                    resourcesAtVertex.append(resourceType)
-                numValue = board.hexTileDict[adjacentHex].resource.num
-                vertexNumValue += diceRoll_expectation[numValue] #Add to total value of this vertex
+        possible_actions = {}
+        state = self.get_initial_setup_state(board)
+        possibleVertices = board.get_setup_roads(self)
+        settlement_commands = self.get_road_build_commands(possibleVertices)
+        possible_actions.update(settlement_commands)
+        action_index = self.initial_choose_action(state, board, possible_actions)
+        action_key = self.index_to_action_key[action_index]
+        action_value = possible_actions[action_key]
+        print(f"Chosen action: {action_key} with value {action_value}")
+        self.build_road(action_value[0], action_value[1], board)
 
-            #basic heuristic for resource diversity
-            vertexNumValue += len(resourcesAtVertex)*2
-            for r in resourcesAtVertex:
-                if(r != 'DESERT' and r not in self.setupResources):
-                    vertexNumValue += 2.5 #Every new resource gets a bonus
-            
-            vertexValues.append(vertexNumValue)
+        reward = self.calculate_reward()
+        next_state = self.get_state(board)
+        self.update_q_table(state, action_index, reward, next_state, board)
 
+    def initial_choose_action(self, state, board, possible_actions):
+        action_keys = list(possible_actions.keys())
+        
+        self.update_action_mappings(action_keys)
 
-        vertexToBuild_index = vertexValues.index(max(vertexValues))
-        vertexToBuild = list(possibleVertices.keys())[vertexToBuild_index]
-
-        #Add to setup resources
-        for adjacentHex in board.boardGraph[vertexToBuild].adjacentHexList:
-            resourceType = board.hexTileDict[adjacentHex].resource.type
-            if(resourceType not in self.setupResources and resourceType != 'DESERT'):
-                self.setupResources.append(resourceType)
-
-        self.build_settlement(vertexToBuild, board)
-
-
-        #Build random road
-        possibleRoads = board.get_setup_roads(self)
-        randomEdge = np.random.randint(0, len(possibleRoads.keys()))
-        self.build_road(list(possibleRoads.keys())[randomEdge][0], list(possibleRoads.keys())[randomEdge][1], board)
-
-
+        if state not in self.q_table:
+            self.q_table[state] = np.zeros(len(possible_actions))
+        if np.random.rand() < self.exploration_rate:
+            action_index = np.random.choice(len(action_keys))
+        else:
+            action_index = np.argmax(self.q_table[state])
+        return action_index
+        
     def update_q_table(self, state, action, reward, next_state, board):
         if state not in self.q_table:
             self.q_table[state] = np.zeros(len(self.get_possible_actions(board)))
@@ -100,16 +152,35 @@ class QLearningAIPlayer(player):
 
 
     def get_state(self, board):
+        
+        ports_list = []
+        is_colonised_list = []
+        for vertex, hex_vertex in board.boardGraph.items():
+            # Extract port and isColonised attributes from each hexTile.Vertex object
+            port = hex_vertex.port
+            is_colonised = hex_vertex.isColonised
+        
+            #  Append extracted attributes to respective lists
+            ports_list.append(port)
+            is_colonised_list.append(is_colonised)
+        # Convert lists to tuples
+        ports_tuple = tuple(ports_list)
+        is_colonised_tuple = tuple(is_colonised_list)
+
         state = (
             self.settlementsLeft,
             self.roadsLeft,
             self.citiesLeft,
+            self.resources_tuple,
+            self.coords_tuple,
             tuple(self.resources.values()),
             self.knightsPlayed,
             self.maxRoadLength,
             self.victoryPoints,
             self.longestRoadFlag,
             self.largestArmyFlag,
+            ports_tuple, 
+            is_colonised_tuple,
             #Add something about board state here
             )
         return state
@@ -173,6 +244,10 @@ class QLearningAIPlayer(player):
             build_commands[f'build_city_{command_index}'] = city
             command_index += 1
         return build_commands
+    
+    def get_robber_commands(self, robber_spots):
+        print(robber_spots)
+
 
 
     def calculate_reward(self):
@@ -204,16 +279,20 @@ class QLearningAIPlayer(player):
         next_state = self.get_state(board)
         self.update_q_table(state, action_index, reward, next_state, board)
 
-    def heuristic_move_robber(self, board):
+    def Qlearning_move_robber(self, board):
         '''Function to control heuristic AI robber
         Calls the choose_player_to_rob and move_robber functions
         args: board object
         '''
-        #Get the best hex and player to rob
+        #Add everything else you're getting out of this
         hex_i, playerRobbed = self.choose_player_to_rob(board)
 
         #Move the robber
         self.move_robber(hex_i, board, playerRobbed)
+
+        #next_state = self.get_state(board)
+        #self.update_q_table(state, action_index, reward, next_state, board)
+
 
         return
     
@@ -224,8 +303,18 @@ class QLearningAIPlayer(player):
         returns: hex index and player to rob
         '''
         #Get list of robber spots
+        #possible_actions = {}
+        #state = self.get_state(board)
         robberHexDict = board.get_robber_spots()
+        #robbing_commands = self.get_robber_commands(robberHexDict)
+        #possible_actions.update(robbing_commands)
+        #action_index = self.initial_choose_action(state, board, possible_actions)
+        #action_key = self.index_to_action_key[action_index]
+        #action_value = possible_actions[action_key]
+        #print(f"Chosen action: {action_key} with value {action_value}")
         
+        #reward = self.calculate_reward()
+
         #Choose a hexTile with maximum adversary settlements
         maxHexScore = 0 #Keep only the best hex to rob
         for hex_ind, hexTile in robberHexDict.items():

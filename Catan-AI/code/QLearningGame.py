@@ -136,8 +136,8 @@ class catanAIGame():
                 print('MaxRoadLength:{}, Longest Road:{}\n'.format(player_i.maxRoadLength, player_i.longestRoadFlag))
         
         else:
-            print("AI using heuristic robber...")
-            currentPlayer.heuristic_move_robber(self.board)
+            print("AI using robber...")
+            currentPlayer.Qlearning_move_robber(self.board)
 
 
     #function to check if a player has the longest road - after building latest road
