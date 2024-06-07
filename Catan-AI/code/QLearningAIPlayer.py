@@ -82,10 +82,13 @@ class QLearningAIPlayer(player):
         possibleVertices = board.get_setup_settlements(self)
         settlement_commands = self.get_settlement_build_commands(possibleVertices)
         possible_actions.update(settlement_commands)
+
+        #self.update_action_mappings(list(possible_actions.keys()))
+
         action_index = self.initial_choose_action(state, board, possible_actions)
         action_key = self.index_to_action_key[action_index]
         action_value = possible_actions[action_key]
-        print(f"Chosen action: {action_key} with value {action_value}")
+        print(f"Chosen action: {action_key} with value {action_value}, {action_index}")
         self.build_settlement(action_value, board)
 
         reward = self.calculate_reward()
@@ -97,10 +100,14 @@ class QLearningAIPlayer(player):
         possibleVertices = board.get_setup_roads(self)
         settlement_commands = self.get_road_build_commands(possibleVertices)
         possible_actions.update(settlement_commands)
+
+        #self.update_action_mappings(list(possible_actions.keys()))
+
         action_index = self.initial_choose_action(state, board, possible_actions)
         action_key = self.index_to_action_key[action_index]
         action_value = possible_actions[action_key]
-        print(f"Chosen action: {action_key} with value {action_value}")
+
+        print(f"Chosen action: {action_key} with value {action_value}, {action_index}")
         self.build_road(action_value[0], action_value[1], board)
 
         reward = self.calculate_reward()
@@ -206,10 +213,29 @@ class QLearningAIPlayer(player):
             possible_cities = board.get_potential_cities(self)
             city_commands = self.get_city_build_commands(possible_cities)
             possible_actions.update(city_commands)
+        
+        # Check if the player has enough resources to trade with bank
+        trade_commands = self.trade()
+        if trade_commands:
+            possible_actions.update(trade_commands)
+            
 
         possible_actions['end_turn'] = None
 
         return possible_actions
+    
+    #Wrapper function to control all trading
+    def trade(self):
+        trade_commands = {}
+        for r1, r1_amount in self.resources.items():
+            if r1_amount >= 6:  
+                for r2, r2_amount in self.resources.items():
+                    if r2_amount < 1:
+                        trade_commands[f'trade_{r1}_for_{r2}'] = (r1, r2)
+                        break
+        return trade_commands
+
+
     
 
     def merge_command_dictionaries(self, commands):
@@ -273,11 +299,77 @@ class QLearningAIPlayer(player):
         elif action_key.startswith("build_city"):
             self.build_city(action_value, board)
             reward = self.calculate_reward()
+        elif action_key.startswith("trade_"):
+            self.trade_with_bank(action_value[0], action_value[1])
+            reward = self.calculate_reward()
         else:
             reward = 0 
 
         next_state = self.get_state(board)
         self.update_q_table(state, action_index, reward, next_state, board)
+
+        #Function to trade with bank
+        def trade_with_bank(self, r1, r2):
+            '''Function to implement trading with bank
+            r1: resource player wants to trade away
+            r2: resource player wants to receive
+            Automatically give player the best available trade ratio
+            '''
+            #Get r1 port string
+            r1_port = "2:1 " + r1
+            if(r1_port in self.ports_tuple and self.resources[r1] >= 2): #Can use 2:1 port with r1
+                self.resources[r1] -= 2
+                self.resources[r2] += 1
+                print("Traded 2 {} for 1 {} using {} Port".format(r1, r2, r1))
+                return
+
+            #Check for 3:1 Port
+            elif('3:1 PORT' in self.ports_tuple and self.resources[r1] >= 3):
+                self.resources[r1] -= 3
+                self.resources[r2] += 1
+                print("Traded 3 {} for 1 {} using 3:1 Port".format(r1, r2))
+                return
+
+            #Check 4:1 port
+            elif(self.resources[r1] >= 4):
+                self.resources[r1] -= 4
+                self.resources[r2] += 1
+                print("Traded 4 {} for 1 {}".format(r1, r2))
+                return
+            
+            else:
+                print("Insufficient resource {} to trade with Bank".format(r1))
+            return
+
+        #Function to discard cards
+    def discardResources(self):
+        '''Function to enable a player to select cards to discard when a 7 is rolled
+        '''
+        maxCards = 7 #Default is 7, but can be changed for testing
+
+        #Calculate resources to discard
+        totalResourceCount = 0
+        for resource, amount in self.resources.items():
+            totalResourceCount += amount
+
+        #Logic to calculate number of cards to discard and allow player to select
+        if totalResourceCount > maxCards:
+            numCardsToDiscard = int(totalResourceCount/2)
+            print("\nPlayer {} has {} cards and will have {} cards discarded...".format(self.name, totalResourceCount, numCardsToDiscard))
+            
+            #Loop to allow player to discard cards
+            for i in range(numCardsToDiscard+1):
+                print("Player {} current resources to discard from:", self.resources)
+                
+                resourceToDiscard = max(self.resources, key=self.resources.get)
+
+                #Discard that resource
+                self.resources[resourceToDiscard] -= 1
+
+
+        else:
+            print("\nPlayer {} has {} cards and does not need to discard any cards!".format(self.name, totalResourceCount))
+            return
 
     def Qlearning_move_robber(self, board):
         '''Function to control heuristic AI robber

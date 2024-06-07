@@ -103,6 +103,7 @@ class catanAIGame():
         diceRoll = dice_1 + dice_2
         print("Dice Roll = ", diceRoll, "{", dice_1, dice_2, "}")
 
+
         return diceRoll
 
     #Function to update resources for all players
@@ -136,8 +137,10 @@ class catanAIGame():
                 print('MaxRoadLength:{}, Longest Road:{}\n'.format(player_i.maxRoadLength, player_i.longestRoadFlag))
         
         else:
-            print("AI using robber...")
-            currentPlayer.Qlearning_move_robber(self.board)
+            # print("AI using robber...")
+            # currentPlayer.Qlearning_move_robber(self.board)
+            for player_i in list(self.playerQueue.queue):
+                player_i.discardResources()
 
 
     #function to check if a player has the longest road - after building latest road
