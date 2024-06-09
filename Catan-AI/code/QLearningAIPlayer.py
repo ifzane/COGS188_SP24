@@ -17,6 +17,13 @@ class QLearningAIPlayer(player):
         self.action_key_to_index = {}
         self.index_to_action_key = {}
 
+        #Dev cards in possession
+        self.newDevCards = [] #List to keep the new dev cards draw - update the main list every turn
+        self.devCards = {'KNIGHT':0, 'VP':0, 'MONOPOLY':0, 'ROADBUILDER':0, 'YEAROFPLENTY':0} 
+        self.devCardPlayedThisTurn = False
+
+        self.visibleVictoryPoints = self.victoryPoints - self.devCards['VP']
+
     # This is currently taken from the heuristic so its random, need to fix
     def updateAI(self): 
         self.isAI = True
@@ -218,6 +225,17 @@ class QLearningAIPlayer(player):
         trade_commands = self.trade()
         if trade_commands:
             possible_actions.update(trade_commands)
+
+        # Option to draw a development card if resources are sufficient
+        dev_card_draw_commands = {}
+        if self.resources['ORE'] >= 1 and self.resources['WHEAT'] >= 1 and self.resources['SHEEP'] >= 1:
+            dev_card_draw_commands['draw_dev_card'] = None
+            possible_actions.update(dev_card_draw_commands)
+
+        # Option to play a development card if any available and not already played this turn
+        if not self.devCardPlayedThisTurn:
+            dev_card_play_commands = self.get_play_dev_card_commands()
+            possible_actions.update(dev_card_play_commands)
             
 
         possible_actions['end_turn'] = None
@@ -301,6 +319,9 @@ class QLearningAIPlayer(player):
             reward = self.calculate_reward()
         elif action_key.startswith("trade_"):
             self.trade_with_bank(action_value[0], action_value[1])
+            reward = self.calculate_reward()
+        elif action_key.startswith("play_"):
+            self.play_devCard(action_value, board)
             reward = self.calculate_reward()
         else:
             reward = 0 
@@ -435,3 +456,56 @@ class QLearningAIPlayer(player):
                 maxHexScore = hexScore
 
         return hexToRob_index, playerToRob_hex
+    
+    #Return dictionary of dev cards to play
+    def get_play_dev_card_commands(self):
+        dev_card_play_commands = {}
+        for card_name, card_amount in self.devCards.items():
+            if card_name != 'VP' and card_amount > 0:  # VP cards are not played directly
+                dev_card_play_commands[f'play_{card_name.lower()}'] = card_name
+        return dev_card_play_commands
+    
+    #Function to do the action of playing a dev card
+    def play_devCard(self, card_name, game):
+        'Update game state'
+        # Check if player can play a devCard this turn
+        if self.devCardPlayedThisTurn:
+            print('Already played 1 Dev Card this turn!')
+            return
+
+        if self.devCards[card_name] <= 0:
+            print(f'No {card_name} cards available to play!')
+            return
+
+        self.devCardPlayedThisTurn = True
+        self.devCards[card_name] -= 1
+
+        print("Playing Dev Card:", card_name)
+
+        # Logic for each Dev Card
+        if card_name == 'KNIGHT':
+            game.robber(self)
+            self.knightsPlayed += 1 
+
+        elif card_name == 'ROADBUILDER':
+            game.build(self, 'ROAD')
+            game.boardView.displayGameScreen()
+            game.build(self, 'ROAD')
+            game.boardView.displayGameScreen()
+
+        elif card_name == 'YEAROFPLENTY':
+            resource_list = ['BRICK', 'WOOD', 'WHEAT', 'SHEEP', 'ORE']
+            print("Resources available:", resource_list)
+
+            #Need to implement how to decide which resources to select
+            #Player gets two resource cards of their choice from the bank
+
+        elif card_name == 'MONOPOLY':
+            resource_list = ['BRICK', 'WOOD', 'WHEAT', 'SHEEP', 'ORE']
+            print("Resources to Monopolize:", resource_list)
+
+            #Need to implement how to decide which resoures to select
+            #Player picks a resource and gets all opponents resource cards of that type
+            
+        return
+
