@@ -1,6 +1,7 @@
 import numpy as np
 from board import *
 from player import *
+import pickle
 
 class QLearningAIPlayer(player):
     
@@ -80,7 +81,8 @@ class QLearningAIPlayer(player):
         ports_tuple, 
         is_colonised_tuple,
         # again need to do something about the board
-    )
+        )
+        return state
 
     def initial_setup(self, board):
         possible_actions = {}
@@ -119,44 +121,51 @@ class QLearningAIPlayer(player):
         reward = self.calculate_reward()
         next_state = self.get_state(board)
         self.update_q_table(state, action_index, reward, next_state, board)
-
+        
     def initial_choose_action(self, state, board, possible_actions):
         action_keys = list(possible_actions.keys())
-
         self.update_action_mappings(action_keys)
 
-        if state not in self.q_table:
-            self.q_table[state] = np.zeros(len(possible_actions))
+        # Convert the state to a tuple for use as a key in the Q-table
+        state_key = tuple(state)
+
+        if state_key not in self.q_table:
+            self.q_table[state_key] = np.zeros(len(action_keys))
         if np.random.rand() < self.exploration_rate:
             action_index = np.random.choice(len(action_keys))
         else:
-            action_index = np.argmax(self.q_table[state])
+            action_index = np.argmax(self.q_table[state_key])
         return action_index
-        
+            
     def update_q_table(self, state, action, reward, next_state, board):
-        if state not in self.q_table:
-            self.q_table[state] = np.zeros(len(self.get_possible_actions(board)))
-        if next_state not in self.q_table:
-            self.q_table[next_state] = np.zeros(len(self.get_possible_actions(board)))
+        # Convert states to tuples for use as keys in the Q-table
+        state_key = tuple(state)
+        next_state_key = tuple(next_state)
 
-        best_next_action = np.argmax(self.q_table[next_state])
-        td_target = reward + self.discount_factor * self.q_table[next_state][best_next_action]
-        td_delta = td_target - self.q_table[state][action]
-        self.q_table[state][action] += self.learning_rate * td_delta
+        if state_key not in self.q_table:
+            self.q_table[state_key] = np.zeros(len(self.get_possible_actions(board)))
+        if next_state_key not in self.q_table:
+            self.q_table[next_state_key] = np.zeros(len(self.get_possible_actions(board)))
 
+        best_next_action = np.argmax(self.q_table[next_state_key])
+        td_target = reward + self.discount_factor * self.q_table[next_state_key][best_next_action]
+        td_delta = td_target - self.q_table[state_key][action]
+        self.q_table[state_key][action] += self.learning_rate * td_delta
 
     def choose_action(self, state, board):
         possible_actions = self.get_possible_actions(board)
         action_keys = list(possible_actions.keys())
-        
         self.update_action_mappings(action_keys)
         
-        if state not in self.q_table:
-            self.q_table[state] = np.zeros(len(self.get_possible_actions(board)))
+        # Convert the state to a tuple for use as a key in the Q-table
+        state_key = tuple(state)
+
+        if state_key not in self.q_table:
+            self.q_table[state_key] = np.zeros(len(action_keys))
         if np.random.rand() < self.exploration_rate:
             action_index = np.random.choice(len(action_keys))
         else:
-            action_index = np.argmax(self.q_table[state])
+            action_index = np.argmax(self.q_table[state_key])
         return action_index
         
     def update_action_mappings(self, action_keys):
@@ -538,3 +547,25 @@ class QLearningAIPlayer(player):
             
         return
 
+
+    # Here's a potential solution to the saving q-values procedure, save and reload them every time
+    def save_q_values(self, file_path):
+        with open(file_path, 'wb') as f:
+            pickle.dump(self.q_table, f)
+
+    def load_q_values(self, file_path):
+        try:
+            with open(file_path, 'rb') as f:
+                self.q_table = pickle.load(f)
+        except FileNotFoundError:
+            print("No existing Q-values file found. Starting with a new Q-table.")
+
+    def train(self, num_episodes):
+        for episode in range(num_episodes):
+            # Training logic
+            ...
+            self.save_q_values('q_values.pkl')
+
+    def play_game(self):
+        # Load Q-values before starting a new game
+        self.load_q_values('q_values.pkl')
