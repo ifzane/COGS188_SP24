@@ -63,7 +63,7 @@ class QLearningAIPlayer(player):
             ports_list.append(port)
             is_colonised_list.append(is_colonised)
         # Convert lists to tuples
-        ports_tuple = tuple(ports_list)
+        self.ports_tuple = tuple(ports_list)
         is_colonised_tuple = tuple(is_colonised_list)
 
         state = (
@@ -78,7 +78,7 @@ class QLearningAIPlayer(player):
         self.victoryPoints,
         self.longestRoadFlag,
         self.largestArmyFlag,
-        ports_tuple, 
+        self.ports_tuple, 
         is_colonised_tuple,
         # again need to do something about the board
         )
@@ -149,6 +149,7 @@ class QLearningAIPlayer(player):
 
         best_next_action = np.argmax(self.q_table[next_state_key])
         td_target = reward + self.discount_factor * self.q_table[next_state_key][best_next_action]
+        #print(state_key, action)
         td_delta = td_target - self.q_table[state_key][action]
         self.q_table[state_key][action] += self.learning_rate * td_delta
 
@@ -186,7 +187,7 @@ class QLearningAIPlayer(player):
             ports_list.append(port)
             is_colonised_list.append(is_colonised)
         # Convert lists to tuples
-        ports_tuple = tuple(ports_list)
+        self.ports_tuple = tuple(ports_list)
         is_colonised_tuple = tuple(is_colonised_list)
 
         state = (
@@ -201,7 +202,7 @@ class QLearningAIPlayer(player):
             self.victoryPoints,
             self.longestRoadFlag,
             self.largestArmyFlag,
-            ports_tuple, 
+            self.ports_tuple, 
             is_colonised_tuple,
             #Add something about board state here
             )
@@ -244,7 +245,7 @@ class QLearningAIPlayer(player):
         if not self.devCardPlayedThisTurn:
             dev_card_play_commands = self.get_play_dev_card_commands()
             possible_actions.update(dev_card_play_commands)
-            
+
 
         possible_actions['end_turn'] = None
 
@@ -322,8 +323,10 @@ class QLearningAIPlayer(player):
             reward += 100
         elif game_event['type'] == 'discard_card':
             reward -= 10
+        elif game_event['type'] == 'road':
+            reward += 1
         elif game_event['type'] == 'trade':
-            reward += 10
+            reward += 1
         return reward
 
 
@@ -340,21 +343,65 @@ class QLearningAIPlayer(player):
             reward = self.calculate_reward({'type': 'settlement'})
         elif action_key.startswith("build_road"):
             self.build_road(action_value[0], action_value[1], board)
-            reward = self.calculate_reward()
+            reward = self.calculate_reward({'type': 'road'})
         elif action_key.startswith("build_city"):
             self.build_city(action_value, board)
             reward = self.calculate_reward({'type': 'city'})
         elif action_key.startswith("trade_"):
             self.trade_with_bank(action_value[0], action_value[1])
             reward = self.calculate_reward({'type': 'trade'})
+        elif action_key.startswith("draw"):
+            self.draw_devCard(action_value, board)
+            reward = self.calculate_reward({'type': 'draw_dev'})
         elif action_key.startswith("play_"):
             self.play_devCard(action_value, board)
-            reward = self.calculate_reward({'type': 'dev'})
+            reward = self.calculate_reward({'type': 'play_dev'})
         else:
             reward = 0 
 
         next_state = self.get_state(board)
         self.update_q_table(state, action_index, reward, next_state, board)
+
+    def draw_devCard(self, action_value, board):
+        #print(f'dev action {action_value}')
+
+        if(self.resources['WHEAT'] >= 1 and self.resources['ORE'] >= 1 and self.resources['SHEEP'] >= 1): #Check if player has resources available
+
+            devCardsToDraw = []
+            for cardName, cardAmount in board.devCardStack.items():
+                devCardsToDraw += [cardName]*cardAmount
+
+             #IF there are no devCards left
+            if(devCardsToDraw == []):
+                print("No Dev Cards Left!")
+                return
+
+            devCardIndex = np.random.randint(0, len(devCardsToDraw))
+
+        #     #Get a random permutation and draw a card
+            devCardsToDraw = np.random.permutation(devCardsToDraw)
+            cardDrawn = devCardsToDraw[devCardIndex]
+
+        #     #Update player resources
+            self.resources['ORE'] -= 1
+            self.resources['WHEAT'] -= 1
+            self.resources['SHEEP'] -= 1
+
+        #     #If card is a victory point apply immediately, else add to new card list
+            if(cardDrawn == 'VP'):
+                self.victoryPoints += 1
+                board.devCardStack[cardDrawn] -= 1
+                self.devCards[cardDrawn] += 1
+                self.visibleVictoryPoints = self.victoryPoints - self.devCards['VP']
+            
+            else:#Update player dev card and the stack
+                self.newDevCards.append(cardDrawn)
+                board.devCardStack[cardDrawn] -= 1
+            
+            print("{} drew a {} from Development Card Stack".format(self.name, cardDrawn))
+
+        else:
+            print("Insufficient Resources for Dev Card. Cost: 1 ORE, 1 WHEAT, 1 SHEEP")
 
         #Function to trade with bank
     def trade_with_bank(self, r1, r2):
@@ -409,7 +456,7 @@ class QLearningAIPlayer(player):
             for i in range(numCardsToDiscard+1):
                 print("Player {} current resources to discard from:", self.resources)
                 
-                resourceToDiscard = max(self.resources, key=self.resources.get)
+                resourceToDiscard = max(self.resources, key=self.resources.get) #get rid of highest resource
 
                 #Discard that resource
                 self.resources[resourceToDiscard] -= 1
@@ -491,6 +538,7 @@ class QLearningAIPlayer(player):
     def get_play_dev_card_commands(self):
         dev_card_play_commands = {}
         for card_name, card_amount in self.devCards.items():
+            print(self.devCards.items())
             if card_name != 'VP' and card_amount > 0:
                 if card_name in ['MONOPOLY', 'YEAROFPLENTY']:
                     resources = ['BRICK', 'WOOD', 'WHEAT', 'SHEEP', 'ORE']
@@ -503,6 +551,7 @@ class QLearningAIPlayer(player):
                                     dev_card_play_commands[f'play_{card_name.lower()}_{resource.lower()}_{second_resource.lower()}'] = (card_name, (resource, second_resource))
                 else:
                     dev_card_play_commands[f'play_{card_name.lower()}'] = card_name
+        #print(dev_card_play_commands)
         return dev_card_play_commands
     
     #Function to do the action of playing a dev card
@@ -558,6 +607,12 @@ class QLearningAIPlayer(player):
 
             
         return
+    
+    def updateDevCards(self):
+        for newCard in self.newDevCards:
+            self.devCards[newCard] += 1
+
+
 
 
     # Here's a potential solution to the saving q-values procedure, save and reload them every time

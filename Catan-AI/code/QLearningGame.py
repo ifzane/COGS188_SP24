@@ -141,6 +141,7 @@ class catanAIGame():
             # currentPlayer.Qlearning_move_robber(self.board)
             for player_i in list(self.playerQueue.queue):
                 player_i.discardResources()
+            #player moves the robber
 
 
     #function to check if a player has the longest road - after building latest road
