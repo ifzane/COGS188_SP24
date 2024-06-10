@@ -221,7 +221,7 @@ class catanAIGame():
                     self.diceStats[diceNum] += 1
                     self.diceStats_list.append(diceNum)
 
-                    currPlayer.move(self.board) #AI Player makes all its moves
+                    currPlayer.move(self.board, self) #AI Player makes all its moves
                     #Check if AI player gets longest road and update Victory points
                     self.check_longest_road(currPlayer)
                     print("Player:{}, Resources:{}, Points: {}".format(currPlayer.name, currPlayer.resources, currPlayer.victoryPoints))

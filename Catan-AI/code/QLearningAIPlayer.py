@@ -101,7 +101,7 @@ class QLearningAIPlayer(player):
 
         reward = self.calculate_reward({'type': None})
         next_state = self.get_state(board)
-        self.update_q_table(state, action_index, reward, next_state, board)
+        #self.update_q_table(state, action_index, reward, next_state, board)
 
         possible_actions = {}
         state = self.get_initial_setup_state(board)
@@ -120,7 +120,7 @@ class QLearningAIPlayer(player):
 
         reward = self.calculate_reward({'type': None})
         next_state = self.get_state(board)
-        self.update_q_table(state, action_index, reward, next_state, board)
+        #self.update_q_table(state, action_index, reward, next_state, board)
         
     def initial_choose_action(self, state, board, possible_actions):
         action_keys = list(possible_actions.keys())
@@ -132,7 +132,7 @@ class QLearningAIPlayer(player):
         if state_key not in self.q_table:
             self.q_table[state_key] = np.zeros(len(action_keys))
         if np.random.rand() < self.exploration_rate:
-            action_index = np.random.choice(len(action_keys))
+            action_index = np.random.choice(len(action_keys)-1)
         else:
             action_index = np.argmax(self.q_table[state_key])
         return action_index
@@ -149,14 +149,18 @@ class QLearningAIPlayer(player):
 
         best_next_action = np.argmax(self.q_table[next_state_key])
         td_target = reward + self.discount_factor * self.q_table[next_state_key][best_next_action]
-        #print(state_key, action)
         td_delta = td_target - self.q_table[state_key][action]
         self.q_table[state_key][action] += self.learning_rate * td_delta
 
-    def choose_action(self, state, board):
-        possible_actions = self.get_possible_actions(board)
-        action_keys = list(possible_actions.keys())
-        self.update_action_mappings(action_keys)
+    def choose_action(self, state, board, robber=False):
+        if robber:
+            robber_spots = board.get_robber_spots()
+            possible_actions = self.get_robber_commands(robber_spots, board)
+            action_keys = list(possible_actions.keys())
+        else:
+            possible_actions = self.get_possible_actions(board)
+            action_keys = list(possible_actions.keys())
+            self.update_action_mappings(action_keys)
         
         # Convert the state to a tuple for use as a key in the Q-table
         state_key = tuple(state)
@@ -298,16 +302,17 @@ class QLearningAIPlayer(player):
             command_index += 1
         return build_commands
     
-    def get_robber_commands(self, robber_spots):
+    def get_robber_commands(self, robber_spots, board):
         robbing_commands = {}
         command_index = 1
         for hex_ind, hexTile in robber_spots.items():
-            vertexList = polygon_corners(self.board.flat, hexTile.hex)
+            vertexList = polygon_corners(board.flat, hexTile.hex)
             for vertex in vertexList:
-                playerAtVertex = self.board.boardGraph[vertex].state['Player']
+                playerAtVertex = board.boardGraph[vertex].state['Player']
                 if playerAtVertex and playerAtVertex != self:
                     robbing_commands[f'move_robber_{command_index}'] = (hex_ind, playerAtVertex)
                     command_index += 1
+        #print(f'rob command {robbing_commands}')
         return robbing_commands
 
     def calculate_reward(self, game_event):
@@ -330,7 +335,7 @@ class QLearningAIPlayer(player):
         return reward
 
 
-    def move(self, board):
+    def move(self, board, game = None):
         state = self.get_state(board)
         possible_actions = self.get_possible_actions(board)
         action_index = self.choose_action(state, board)
@@ -354,13 +359,13 @@ class QLearningAIPlayer(player):
             self.draw_devCard(action_value, board)
             reward = self.calculate_reward({'type': 'draw_dev'})
         elif action_key.startswith("play_"):
-            self.play_devCard(action_value, board)
+            self.play_devCard(action_value, game, board)
             reward = self.calculate_reward({'type': 'play_dev'})
         else:
             reward = 0 
 
         next_state = self.get_state(board)
-        self.update_q_table(state, action_index, reward, next_state, board)
+        #self.update_q_table(state, action_index, reward, next_state, board)
 
     def draw_devCard(self, action_value, board):
         #print(f'dev action {action_value}')
@@ -470,12 +475,15 @@ class QLearningAIPlayer(player):
     def Qlearning_move_robber(self, board):
         state = self.get_state(board)
         robber_spots = board.get_robber_spots()
-        robbing_commands = self.get_robber_commands(robber_spots)
+        robbing_commands = self.get_robber_commands(robber_spots, board)
         if not robbing_commands:
             return
+        print(f'rob command {robbing_commands}')
+
+        #choose rober location from action list
 
         self.update_action_mappings(list(robbing_commands.keys()))
-        action_index = self.choose_action(state, board)
+        action_index = self.choose_action(state, board, robber=True)
         action_key = self.index_to_action_key[action_index]
         hexToRob_index, playerToRob = robbing_commands[action_key]
 
@@ -484,7 +492,17 @@ class QLearningAIPlayer(player):
 
         reward = 2  # Reward for robbing successfully
         next_state = self.get_state(board)
-        self.update_q_table(state, action_index, reward, next_state, board)
+        #self.update_q_table(state, action_index, reward, next_state, board)
+
+
+    def move_robber(self, hexIndex, board, player_robbed):
+        'Update boardGraph with Robber and steal resource'
+        board.updateBoardGraph_robber(hexIndex)
+        
+        #Steal a random resource from other players
+        self.steal_resource(player_robbed)
+
+        return
     
     def choose_player_to_rob(self, board):
         '''Heuristic function to choose the player with maximum points.
@@ -538,7 +556,6 @@ class QLearningAIPlayer(player):
     def get_play_dev_card_commands(self):
         dev_card_play_commands = {}
         for card_name, card_amount in self.devCards.items():
-            print(self.devCards.items())
             if card_name != 'VP' and card_amount > 0:
                 if card_name in ['MONOPOLY', 'YEAROFPLENTY']:
                     resources = ['BRICK', 'WOOD', 'WHEAT', 'SHEEP', 'ORE']
@@ -555,22 +572,23 @@ class QLearningAIPlayer(player):
         return dev_card_play_commands
     
     #Function to do the action of playing a dev card
-    def play_devCard(self, card_name, game):
+    def play_devCard(self, card_name, game, board):
         'Update game state'
         # Check if player can play a devCard this turn
         if self.devCardPlayedThisTurn:
             print('Already played 1 Dev Card this turn!')
             return
-
-        if self.devCards[card_name] <= 0:
-            print(f'No {card_name} cards available to play!')
-            return
-
+        
         if isinstance(card_name, tuple):
             card_name, resources = card_name
         else:
             card_name = card_name
             resources = None
+
+        if self.devCards[card_name] <= 0:
+            print(f'No {card_name} cards available to play!')
+            return
+
 
         self.devCardPlayedThisTurn = True
         self.devCards[card_name] -= 1
@@ -579,7 +597,7 @@ class QLearningAIPlayer(player):
 
         # Logic for each Dev Card
         if card_name == 'KNIGHT':
-            game.robber(self)
+            self.Qlearning_move_robber(board)
             self.knightsPlayed += 1 
 
         elif card_name == 'ROADBUILDER':
@@ -611,6 +629,7 @@ class QLearningAIPlayer(player):
     def updateDevCards(self):
         for newCard in self.newDevCards:
             self.devCards[newCard] += 1
+        self.newDevCards = []
 
 
 
