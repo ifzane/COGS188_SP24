@@ -83,17 +83,16 @@ class QLearningAIPlayer(player):
     )
 
     def initial_setup(self, board):
-        #Build random settlement
         possible_actions = {}
         state = self.get_initial_setup_state(board)
         possibleVertices = board.get_setup_settlements(self)
         settlement_commands = self.get_settlement_build_commands(possibleVertices)
         possible_actions.update(settlement_commands)
 
-        #self.update_action_mappings(list(possible_actions.keys()))
+        self.update_action_mappings(list(possible_actions.keys()))
 
         action_index = self.initial_choose_action(state, board, possible_actions)
-        action_key = self.index_to_action_key[action_index]
+        action_key = self.index_to_action_key.get(action_index)
         action_value = possible_actions[action_key]
         print(f"Chosen action: {action_key} with value {action_value}, {action_index}")
         self.build_settlement(action_value, board)
@@ -105,13 +104,13 @@ class QLearningAIPlayer(player):
         possible_actions = {}
         state = self.get_initial_setup_state(board)
         possibleVertices = board.get_setup_roads(self)
-        settlement_commands = self.get_road_build_commands(possibleVertices)
-        possible_actions.update(settlement_commands)
+        road_commands = self.get_road_build_commands(possibleVertices)
+        possible_actions.update(road_commands)
 
-        #self.update_action_mappings(list(possible_actions.keys()))
+        self.update_action_mappings(list(possible_actions.keys()))
 
         action_index = self.initial_choose_action(state, board, possible_actions)
-        action_key = self.index_to_action_key[action_index]
+        action_key = self.index_to_action_key.get(action_index)
         action_value = possible_actions[action_key]
 
         print(f"Chosen action: {action_key} with value {action_value}, {action_index}")
@@ -123,7 +122,7 @@ class QLearningAIPlayer(player):
 
     def initial_choose_action(self, state, board, possible_actions):
         action_keys = list(possible_actions.keys())
-        
+
         self.update_action_mappings(action_keys)
 
         if state not in self.q_table:
@@ -290,9 +289,16 @@ class QLearningAIPlayer(player):
         return build_commands
     
     def get_robber_commands(self, robber_spots):
-        print(robber_spots)
-
-
+        robbing_commands = {}
+        command_index = 1
+        for hex_ind, hexTile in robber_spots.items():
+            vertexList = polygon_corners(self.board.flat, hexTile.hex)
+            for vertex in vertexList:
+                playerAtVertex = self.board.boardGraph[vertex].state['Player']
+                if playerAtVertex and playerAtVertex != self:
+                    robbing_commands[f'move_robber_{command_index}'] = (hex_ind, playerAtVertex)
+                    command_index += 1
+        return robbing_commands
 
     def calculate_reward(self):
 
@@ -363,9 +369,9 @@ class QLearningAIPlayer(player):
             return
 
         #Function to discard cards
+
+       
     def discardResources(self):
-        '''Function to enable a player to select cards to discard when a 7 is rolled
-        '''
         maxCards = 7 #Default is 7, but can be changed for testing
 
         #Calculate resources to discard
@@ -391,23 +397,26 @@ class QLearningAIPlayer(player):
         else:
             print("\nPlayer {} has {} cards and does not need to discard any cards!".format(self.name, totalResourceCount))
             return
+    
 
     def Qlearning_move_robber(self, board):
-        '''Function to control heuristic AI robber
-        Calls the choose_player_to_rob and move_robber functions
-        args: board object
-        '''
-        #Add everything else you're getting out of this
-        hex_i, playerRobbed = self.choose_player_to_rob(board)
+        state = self.get_state(board)
+        robber_spots = board.get_robber_spots()
+        robbing_commands = self.get_robber_commands(robber_spots)
+        if not robbing_commands:
+            return
 
-        #Move the robber
-        self.move_robber(hex_i, board, playerRobbed)
+        self.update_action_mappings(list(robbing_commands.keys()))
+        action_index = self.choose_action(state, board)
+        action_key = self.index_to_action_key[action_index]
+        hexToRob_index, playerToRob = robbing_commands[action_key]
 
-        #next_state = self.get_state(board)
-        #self.update_q_table(state, action_index, reward, next_state, board)
+        # Move the robber
+        self.move_robber(hexToRob_index, board, playerToRob)
 
-
-        return
+        reward = 2  # Reward for robbing successfully
+        next_state = self.get_state(board)
+        self.update_q_table(state, action_index, reward, next_state, board)
     
     def choose_player_to_rob(self, board):
         '''Heuristic function to choose the player with maximum points.
@@ -461,8 +470,18 @@ class QLearningAIPlayer(player):
     def get_play_dev_card_commands(self):
         dev_card_play_commands = {}
         for card_name, card_amount in self.devCards.items():
-            if card_name != 'VP' and card_amount > 0:  # VP cards are not played directly
-                dev_card_play_commands[f'play_{card_name.lower()}'] = card_name
+            if card_name != 'VP' and card_amount > 0:
+                if card_name in ['MONOPOLY', 'YEAROFPLENTY']:
+                    resources = ['BRICK', 'WOOD', 'WHEAT', 'SHEEP', 'ORE']
+                    for resource in resources:
+                        if card_name == 'MONOPOLY':
+                            dev_card_play_commands[f'play_{card_name.lower()}_{resource.lower()}'] = (card_name, resource)
+                        elif card_name == 'YEAROFPLENTY':
+                            for second_resource in resources:
+                                if second_resource != resource:
+                                    dev_card_play_commands[f'play_{card_name.lower()}_{resource.lower()}_{second_resource.lower()}'] = (card_name, (resource, second_resource))
+                else:
+                    dev_card_play_commands[f'play_{card_name.lower()}'] = card_name
         return dev_card_play_commands
     
     #Function to do the action of playing a dev card
@@ -476,6 +495,12 @@ class QLearningAIPlayer(player):
         if self.devCards[card_name] <= 0:
             print(f'No {card_name} cards available to play!')
             return
+
+        if isinstance(card_name, tuple):
+            card_name, resources = card_name
+        else:
+            card_name = card_name
+            resources = None
 
         self.devCardPlayedThisTurn = True
         self.devCards[card_name] -= 1
@@ -494,18 +519,22 @@ class QLearningAIPlayer(player):
             game.boardView.displayGameScreen()
 
         elif card_name == 'YEAROFPLENTY':
-            resource_list = ['BRICK', 'WOOD', 'WHEAT', 'SHEEP', 'ORE']
-            print("Resources available:", resource_list)
-
-            #Need to implement how to decide which resources to select
-            #Player gets two resource cards of their choice from the bank
+            resource1, resource2 = resources
+            self.resources[resource1] += 1
+            self.resources[resource2] += 1
+            print(f"Received 1 {resource1} and 1 {resource2} from YEAROFPLENTY")
 
         elif card_name == 'MONOPOLY':
-            resource_list = ['BRICK', 'WOOD', 'WHEAT', 'SHEEP', 'ORE']
-            print("Resources to Monopolize:", resource_list)
-
+            resource_to_monopolize = resources
+            for player in list(game.playerQueue.queue):
+                if player != self:
+                    num_lost = player.resources[resource_to_monopolize]
+                    player.resources[resource_to_monopolize] = 0
+                    self.resources[resource_to_monopolize] += num_lost
+            print(f"Monopolized all {resource_to_monopolize} resources from opponents")
             #Need to implement how to decide which resoures to select
             #Player picks a resource and gets all opponents resource cards of that type
+
             
         return
 
