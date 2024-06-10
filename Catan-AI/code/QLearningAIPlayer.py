@@ -99,7 +99,7 @@ class QLearningAIPlayer(player):
         print(f"Chosen action: {action_key} with value {action_value}, {action_index}")
         self.build_settlement(action_value, board)
 
-        reward = self.calculate_reward()
+        reward = self.calculate_reward({'type': None})
         next_state = self.get_state(board)
         self.update_q_table(state, action_index, reward, next_state, board)
 
@@ -118,7 +118,7 @@ class QLearningAIPlayer(player):
         print(f"Chosen action: {action_key} with value {action_value}, {action_index}")
         self.build_road(action_value[0], action_value[1], board)
 
-        reward = self.calculate_reward()
+        reward = self.calculate_reward({'type': None})
         next_state = self.get_state(board)
         self.update_q_table(state, action_index, reward, next_state, board)
         
@@ -309,10 +309,22 @@ class QLearningAIPlayer(player):
                     command_index += 1
         return robbing_commands
 
-    def calculate_reward(self):
+    def calculate_reward(self, game_event):
+        #the input is a dictionary {'type': value}
 
         # Need to figure out a better reward value
-        return self.victoryPoints
+        reward = -1
+        if game_event['type'] == 'victory_point':
+            reward += 100
+        elif game_event['type'] == 'settlement':
+            reward += 100
+        elif game_event['type'] == 'city':
+            reward += 100
+        elif game_event['type'] == 'discard_card':
+            reward -= 10
+        elif game_event['type'] == 'trade':
+            reward += 10
+        return reward
 
 
     def move(self, board):
@@ -325,19 +337,19 @@ class QLearningAIPlayer(player):
 
         if action_key.startswith("build_settlement"):
             self.build_settlement(action_value, board)
-            reward = self.calculate_reward()
+            reward = self.calculate_reward({'type': 'settlement'})
         elif action_key.startswith("build_road"):
             self.build_road(action_value[0], action_value[1], board)
             reward = self.calculate_reward()
         elif action_key.startswith("build_city"):
             self.build_city(action_value, board)
-            reward = self.calculate_reward()
+            reward = self.calculate_reward({'type': 'city'})
         elif action_key.startswith("trade_"):
             self.trade_with_bank(action_value[0], action_value[1])
-            reward = self.calculate_reward()
+            reward = self.calculate_reward({'type': 'trade'})
         elif action_key.startswith("play_"):
             self.play_devCard(action_value, board)
-            reward = self.calculate_reward()
+            reward = self.calculate_reward({'type': 'dev'})
         else:
             reward = 0 
 
@@ -345,39 +357,39 @@ class QLearningAIPlayer(player):
         self.update_q_table(state, action_index, reward, next_state, board)
 
         #Function to trade with bank
-        def trade_with_bank(self, r1, r2):
-            '''Function to implement trading with bank
-            r1: resource player wants to trade away
-            r2: resource player wants to receive
-            Automatically give player the best available trade ratio
-            '''
-            #Get r1 port string
-            r1_port = "2:1 " + r1
-            if(r1_port in self.ports_tuple and self.resources[r1] >= 2): #Can use 2:1 port with r1
-                self.resources[r1] -= 2
-                self.resources[r2] += 1
-                print("Traded 2 {} for 1 {} using {} Port".format(r1, r2, r1))
-                return
-
-            #Check for 3:1 Port
-            elif('3:1 PORT' in self.ports_tuple and self.resources[r1] >= 3):
-                self.resources[r1] -= 3
-                self.resources[r2] += 1
-                print("Traded 3 {} for 1 {} using 3:1 Port".format(r1, r2))
-                return
-
-            #Check 4:1 port
-            elif(self.resources[r1] >= 4):
-                self.resources[r1] -= 4
-                self.resources[r2] += 1
-                print("Traded 4 {} for 1 {}".format(r1, r2))
-                return
-            
-            else:
-                print("Insufficient resource {} to trade with Bank".format(r1))
+    def trade_with_bank(self, r1, r2):
+        '''Function to implement trading with bank
+        r1: resource player wants to trade away
+        r2: resource player wants to receive
+        Automatically give player the best available trade ratio
+        '''
+        #Get r1 port string
+        r1_port = "2:1 " + r1
+        if(r1_port in self.ports_tuple and self.resources[r1] >= 2): #Can use 2:1 port with r1
+            self.resources[r1] -= 2
+            self.resources[r2] += 1
+            print("Traded 2 {} for 1 {} using {} Port".format(r1, r2, r1))
             return
 
-        #Function to discard cards
+        #Check for 3:1 Port
+        elif('3:1 PORT' in self.ports_tuple and self.resources[r1] >= 3):
+            self.resources[r1] -= 3
+            self.resources[r2] += 1
+            print("Traded 3 {} for 1 {} using 3:1 Port".format(r1, r2))
+            return
+
+        #Check 4:1 port
+        elif(self.resources[r1] >= 4):
+            self.resources[r1] -= 4
+            self.resources[r2] += 1
+            print("Traded 4 {} for 1 {}".format(r1, r2))
+            return
+        
+        else:
+            print("Insufficient resource {} to trade with Bank".format(r1))
+        return
+
+    #Function to discard cards
 
        
     def discardResources(self):
