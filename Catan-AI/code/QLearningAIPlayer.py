@@ -5,7 +5,7 @@ import pickle
 
 class QLearningAIPlayer(player):
     
-    def __init__(self, name, playerColor, learning_rate=0.1, discount_factor=0.9, exploration_rate=0.1):
+    def __init__(self, name, playerColor, learning_rate=0.1, discount_factor=0.9, exploration_rate=1):
         
         # needs to be moved to some other function once we create the functions to run more, just here for now
         super().__init__(name, playerColor)
@@ -65,6 +65,7 @@ class QLearningAIPlayer(player):
         # Convert lists to tuples
         self.ports_tuple = tuple(ports_list)
         is_colonised_tuple = tuple(is_colonised_list)
+        possible_actions_tuple = tuple(self.get_possible_actions(board))
 
         state = (
         self.settlementsLeft,
@@ -80,6 +81,7 @@ class QLearningAIPlayer(player):
         self.largestArmyFlag,
         self.ports_tuple, 
         is_colonised_tuple,
+        possible_actions_tuple,
         # again need to do something about the board
         )
         return state
@@ -101,7 +103,7 @@ class QLearningAIPlayer(player):
 
         reward = self.calculate_reward({'type': None})
         next_state = self.get_state(board)
-        #self.update_q_table(state, action_index, reward, next_state, board)
+        self.update_q_table(state, action_index, reward, next_state, board)
 
         possible_actions = {}
         state = self.get_initial_setup_state(board)
@@ -120,7 +122,7 @@ class QLearningAIPlayer(player):
 
         reward = self.calculate_reward({'type': None})
         next_state = self.get_state(board)
-        #self.update_q_table(state, action_index, reward, next_state, board)
+        self.update_q_table(state, action_index, reward, next_state, board)
         
     def initial_choose_action(self, state, board, possible_actions):
         action_keys = list(possible_actions.keys())
@@ -131,8 +133,10 @@ class QLearningAIPlayer(player):
 
         if state_key not in self.q_table:
             self.q_table[state_key] = np.zeros(len(action_keys))
+        elif np.all(self.q_table[state_key] == 0):
+            self.q_table[state_key] = np.zeros(len(action_keys))
         if np.random.rand() < self.exploration_rate:
-            action_index = np.random.choice(len(action_keys)-1)
+            action_index = np.random.choice(len(action_keys))
         else:
             action_index = np.argmax(self.q_table[state_key])
         return action_index
@@ -141,6 +145,7 @@ class QLearningAIPlayer(player):
         # Convert states to tuples for use as keys in the Q-table
         state_key = tuple(state)
         next_state_key = tuple(next_state)
+
 
         if state_key not in self.q_table:
             self.q_table[state_key] = np.zeros(len(self.get_possible_actions(board)))
@@ -157,6 +162,7 @@ class QLearningAIPlayer(player):
             robber_spots = board.get_robber_spots()
             possible_actions = self.get_robber_commands(robber_spots, board)
             action_keys = list(possible_actions.keys())
+
         elif road_only:
             possible_roads = board.get_potential_roads(self)
             road_commands = self.get_road_build_commands(possible_roads)
@@ -171,6 +177,8 @@ class QLearningAIPlayer(player):
         state_key = tuple(state)
 
         if state_key not in self.q_table:
+            self.q_table[state_key] = np.zeros(len(action_keys))
+        elif np.all(self.q_table[state_key] == 0):
             self.q_table[state_key] = np.zeros(len(action_keys))
         if np.random.rand() < self.exploration_rate:
             action_index = np.random.choice(len(action_keys))
@@ -198,6 +206,8 @@ class QLearningAIPlayer(player):
         # Convert lists to tuples
         self.ports_tuple = tuple(ports_list)
         is_colonised_tuple = tuple(is_colonised_list)
+        possible_actions_tuple = tuple(self.get_possible_actions(board))
+
 
         state = (
             self.settlementsLeft,
@@ -213,6 +223,7 @@ class QLearningAIPlayer(player):
             self.largestArmyFlag,
             self.ports_tuple, 
             is_colonised_tuple,
+            possible_actions_tuple,
             #Add something about board state here
             )
         return state
@@ -370,7 +381,7 @@ class QLearningAIPlayer(player):
             reward = 0 
 
         next_state = self.get_state(board)
-        #self.update_q_table(state, action_index, reward, next_state, board)
+        self.update_q_table(state, action_index, reward, next_state, board)
 
     def draw_devCard(self, action_value, board):
         #print(f'dev action {action_value}')
@@ -497,7 +508,7 @@ class QLearningAIPlayer(player):
 
         reward = 2  # Reward for robbing successfully
         next_state = self.get_state(board)
-        #self.update_q_table(state, action_index, reward, next_state, board)
+        self.update_q_table(state, action_index, reward, next_state, board)
 
 
     def move_robber(self, hexIndex, board, player_robbed):
