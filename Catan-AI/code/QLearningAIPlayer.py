@@ -152,11 +152,16 @@ class QLearningAIPlayer(player):
         td_delta = td_target - self.q_table[state_key][action]
         self.q_table[state_key][action] += self.learning_rate * td_delta
 
-    def choose_action(self, state, board, robber=False):
+    def choose_action(self, state, board, robber=False, road_only=False):
         if robber:
             robber_spots = board.get_robber_spots()
             possible_actions = self.get_robber_commands(robber_spots, board)
             action_keys = list(possible_actions.keys())
+        elif road_only:
+            possible_roads = board.get_potential_roads(self)
+            road_commands = self.get_road_build_commands(possible_roads)
+            action_keys = list(road_commands.keys())
+
         else:
             possible_actions = self.get_possible_actions(board)
             action_keys = list(possible_actions.keys())
@@ -478,7 +483,7 @@ class QLearningAIPlayer(player):
         robbing_commands = self.get_robber_commands(robber_spots, board)
         if not robbing_commands:
             return
-        print(f'rob command {robbing_commands}')
+        #print(f'rob command {robbing_commands}')
 
         #choose rober location from action list
 
@@ -574,6 +579,7 @@ class QLearningAIPlayer(player):
     #Function to do the action of playing a dev card
     def play_devCard(self, card_name, game, board):
         'Update game state'
+        state = self.get_state(board)
         # Check if player can play a devCard this turn
         if self.devCardPlayedThisTurn:
             print('Already played 1 Dev Card this turn!')
@@ -601,10 +607,16 @@ class QLearningAIPlayer(player):
             self.knightsPlayed += 1 
 
         elif card_name == 'ROADBUILDER':
-            game.build(self, 'ROAD')
-            game.boardView.displayGameScreen()
-            game.build(self, 'ROAD')
-            game.boardView.displayGameScreen()
+            for i in range(2):
+                self.resources['WOOD'] +=1
+                self.resources['BRICK'] +=1
+                possible_roads = board.get_potential_roads(self)
+                road_commands = self.get_road_build_commands(possible_roads)
+                road_commands_keys = list(road_commands.keys())
+                action_value = self.choose_action(state, board, road_only=True)
+                action_values = road_commands[road_commands_keys[action_value]]
+                self.build_road(action_values[0], action_values[1], board)
+
 
         elif card_name == 'YEAROFPLENTY':
             resource1, resource2 = resources
