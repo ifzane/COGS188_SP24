@@ -14,24 +14,25 @@ import matplotlib.pyplot as plt
 #Class to implement an only AI
 class catanAIGame():
     #Create new gameboard
-    def __init__(self):
-        print("Initializing Settlers of Catan with only AI Players...")
+    def __init__(self, current_episode=0):
+        print("Initializing Settlers of Catan with only AI Players...") 
         self.board = catanBoard()
 
         #Game State variables
         self.gameOver = False
         self.maxPoints = 10
-        self.numPlayers = 0
+        self.numPlayers = 3
+        self.current_episode = current_episode
 
         #Dictionary to keep track of dice statistics
         self.diceStats = {2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0}
         self.diceStats_list = []
 
-        while(self.numPlayers not in [3,4]): #Only accept 3 and 4 player games
-            try:
-                self.numPlayers = int(input("Enter Number of Players (3 or 4):"))
-            except:
-                print("Please input a valid number")
+        # while(self.numPlayers not in [3,4]): #Only accept 3 and 4 player games
+        #     try:
+        #         self.numPlayers = int(input("Enter Number of Players (3 or 4):"))
+        #     except:
+        #         print("Please input a valid number")
 
         print("Initializing game with {} players...".format(self.numPlayers))
         print("Note that Player 1 goes first, Player 2 second and so forth.")
@@ -45,11 +46,13 @@ class catanAIGame():
 
         #Functiont to go through initial set up
         self.build_initial_settlements()
+
         self.playCatan()
+        #self.playCatan(10, current_episode)
 
         #Plot diceStats histogram
-        plt.hist(self.diceStats_list, bins = 11)
-        plt.show()
+        # plt.hist(self.diceStats_list, bins = 11)
+        # plt.show()
 
         return None
     
@@ -58,9 +61,10 @@ class catanAIGame():
     def build_initial_settlements(self):
         #Initialize new players with names and colors
         playerColors = ['black', 'darkslateblue', 'magenta4', 'orange1']
+        names = ['Tom', 'Kai', 'Ian']
         for i in range(self.numPlayers):
-            playerNameInput = input("Enter AI Player {} name: ".format(i+1))
-            newPlayer = QLearningAIPlayer(playerNameInput, playerColors[i])
+            #playerNameInput = input("Enter AI Player {} name: ".format(i+1))
+            newPlayer = QLearningAIPlayer(names[i], playerColors[i], f'{names[i]}_q_values.pkl')
             newPlayer.updateAI()
             self.playerQueue.put(newPlayer)
 
@@ -71,7 +75,7 @@ class catanAIGame():
             player_i.initial_setup(self.board)
             pygame.event.pump()
             self.boardView.displayGameScreen()
-            pygame.time.delay(1000)
+            #pygame.time.delay(1000)
 
 
         #Build Settlements and roads of each player reverse
@@ -80,7 +84,7 @@ class catanAIGame():
             player_i.initial_setup(self.board)
             pygame.event.pump()
             self.boardView.displayGameScreen()
-            pygame.time.delay(1000)
+            #pygame.time.delay(1000)
             
             print("Player {} starts with {} resources".format(player_i.name, len(player_i.setupResources)))
 
@@ -92,7 +96,7 @@ class catanAIGame():
                     player_i.resources[resourceGenerated] += 1
                     print("{} collects 1 {} from Settlement".format(player_i.name, resourceGenerated))
         
-        pygame.time.delay(5000)
+        #pygame.time.delay(5000)
         self.gameSetup = False
 
 
@@ -142,7 +146,7 @@ class catanAIGame():
             for player_i in list(self.playerQueue.queue):
                 player_i.discardResources()
             #player moves the robber
-            currentPlayer.Qlearning_move_robber(self.board)
+            currentPlayer.heuristic_move_robber(self.board)
 
 
     #function to check if a player has the longest road - after building latest road
@@ -194,62 +198,125 @@ class catanAIGame():
     #Function that runs the main game loop with all players and pieces
     def playCatan(self):
         #self.board.displayBoard() #Display updated board
-        numTurns = 0
-        while (self.gameOver == False):
-            #Loop for each player's turn -> iterate through the player queue
-            for currPlayer in self.playerQueue.queue:
-                numTurns += 1
-                print("---------------------------------------------------------------------------")
-                print("Current Player:", currPlayer.name)
+            numTurns = 0
+            while (self.gameOver == False):
+                #Loop for each player's turn -> iterate through the player queue
+                for currPlayer in self.playerQueue.queue:
+                    numTurns += 1
+                    print("---------------------------------------------------------------------------")
+                    print("Current Player:", currPlayer.name)
 
-                turnOver = False #boolean to keep track of turn
-                diceRolled = False  #Boolean for dice roll status
-                
-                #Update Player's dev card stack with dev cards drawn in previous turn and reset devCardPlayedThisTurn
-                currPlayer.updateDevCards()
-                currPlayer.devCardPlayedThisTurn = False
-
-                while(turnOver == False):
-
-                    #TO-DO: Add logic for AI Player to move
-                    #TO-DO: Add option of AI Player playing a dev card prior to dice roll
+                    turnOver = False #boolean to keep track of turn
+                    diceRolled = False  #Boolean for dice roll status
                     
-                    #Roll Dice and update player resources and dice stats
-                    pygame.event.pump()
-                    diceNum = self.rollDice()
-                    diceRolled = True
-                    self.update_playerResources(diceNum, currPlayer)
-                    self.diceStats[diceNum] += 1
-                    self.diceStats_list.append(diceNum)
+                    #Update Player's dev card stack with dev cards drawn in previous turn and reset devCardPlayedThisTurn
+                    currPlayer.updateDevCards()
+                    currPlayer.devCardPlayedThisTurn = False
 
-                    currPlayer.move(self.board, self) #AI Player makes all its moves
-                    #Check if AI player gets longest road and update Victory points
-                    self.check_longest_road(currPlayer)
-                    print("Player:{}, Resources:{}, Points: {}".format(currPlayer.name, currPlayer.resources, currPlayer.victoryPoints))
-                    
-                    self.boardView.displayGameScreen()#Update back to original gamescreen
-                    pygame.time.delay(300)
-                    turnOver = True
-                    
-                    #Check if game is over
-                    if currPlayer.victoryPoints >= self.maxPoints:
-                        self.gameOver = True
-                        self.turnOver = True
-                        print("====================================================")
-                        print("PLAYER {} WINS IN {} TURNS!".format(currPlayer.name, int(numTurns/4)))
-                        print(self.diceStats)
-                        print("Exiting game in 10 seconds...")
-                        pygame.time.delay(10000)
+                    while(turnOver == False):
+
+                        #TO-DO: Add logic for AI Player to move
+                        #TO-DO: Add option of AI Player playing a dev card prior to dice roll
+                        
+                        #Roll Dice and update player resources and dice stats
+                        pygame.event.pump()
+                        diceNum = self.rollDice()
+                        diceRolled = True
+                        self.update_playerResources(diceNum, currPlayer)
+                        self.diceStats[diceNum] += 1
+                        self.diceStats_list.append(diceNum)
+
+                        currPlayer.move(self.board, self) #AI Player makes all its moves
+                        #Check if AI player gets longest road and update Victory points
+                        self.check_longest_road(currPlayer)
+                        print("Player:{}, Resources:{}, Points: {}".format(currPlayer.name, currPlayer.resources, currPlayer.victoryPoints))
+                        
+                        self.boardView.displayGameScreen()#Update back to original gamescreen
+                        #pygame.time.delay(300)
+                        #add multiple actions per turn
+                        turnOver = True
+                        
+                        #Check if game is over
+                        if currPlayer.victoryPoints >= self.maxPoints:
+                            self.gameOver = True
+                            self.turnOver = True
+                            print("====================================================")
+                            print("PLAYER {} WINS IN {} TURNS!".format(currPlayer.name, int(numTurns/4)))
+                            #print(self.diceStats)
+                            #print("Exiting game in 10 seconds...")
+                            #pygame.time.delay(10000)
+                            winner[currPlayer.name]  +=1
+                            
+                            break
+
+                    if(self.gameOver):
+                        # startTime = pygame.time.get_ticks()
+                        # runTime = 0
+                        # while(runTime < 5000): #5 second delay prior to quitting
+                        #     runTime = pygame.time.get_ticks() - startTime
+                        #save q values
+                        #call new episode
+                        
+                        from QLearningAIPlayer import reward_dictionary
+                        for currPlayer in self.playerQueue.queue:
+                            avg_reward_per_game[currPlayer.name].append(np.mean(reward_dictionary[currPlayer.name]))
+                            points_per_game[currPlayer.name].append(currPlayer.victoryPoints)
+                            currPlayer.save_q_values(f'{currPlayer.get_name()}_q_values.pkl')
+                        print('q_table saved')
+                        # if current_episode < num_episodes:
+                        #     self.current_episode += 1
+                        #print(f'current episode : {current_episode}, out of {num_episodes} episodes')
+                        #newGame_AI = catanAIGame(current_episode)
+
                         break
-
-                if(self.gameOver):
-                    startTime = pygame.time.get_ticks()
-                    runTime = 0
-                    while(runTime < 5000): #5 second delay prior to quitting
-                        runTime = pygame.time.get_ticks() - startTime
-
-                    break
-                                   
+                                    
 
 #Initialize new game and run
-newGame_AI = catanAIGame()
+
+
+
+num_episodes = int(input("Enter Number of Episodes"))
+winner = {'Tom':0, 'Kai':0, "Ian":0}
+points_per_game = {'Tom':[], 'Kai':[], 'Ian':[]}
+avg_reward_per_game = {'Tom':[], 'Kai':[], 'Ian':[]}
+
+def append_to_dict(item, name):
+    avg_reward_per_game[name].append(item)
+    
+for episode in range(num_episodes):
+    print(f"Starting episode {episode + 1}/{num_episodes}")
+
+    newGame_AI = catanAIGame()
+
+print(winner)
+for key, value in points_per_game.items():
+    mean = sum(value)/len(value)
+    std = np.std(value, ddof=1)
+    print(f'name {key}, mean {mean}, standard dev {std}')
+for key, value in avg_reward_per_game.items():
+    mean = sum(value)/len(value)
+    std = np.std(value, ddof=1)
+    print(f'name {key}, mean {mean}, standard dev {std}')
+#plot stuff
+def plot_avg_reward(rewards, player):
+    import matplotlib.pyplot as plt
+    episodes = list(range(1, len(rewards) + 1))
+
+
+
+    plt.figure(figsize=(10, 5))  
+    plt.plot(episodes, rewards, linestyle='-', color='b')
+
+    # Adding title and labels
+    plt.title(f'Average Rewards per Episode for AI {player}')
+    plt.xlabel('Episodes')
+    plt.ylabel('Average Reward')
+    plt.ylim(-5, 10)
+
+    # Optional: Adding grid
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+for key, item in avg_reward_per_game.items():
+    plot_avg_reward(item, key)

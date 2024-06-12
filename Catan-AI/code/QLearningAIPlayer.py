@@ -2,10 +2,13 @@ import numpy as np
 from board import *
 from player import *
 import pickle
+import os
+
+reward_dictionary = {'Tom':[], 'Kai':[], "Ian":[]}
 
 class QLearningAIPlayer(player):
     
-    def __init__(self, name, playerColor, learning_rate=0.1, discount_factor=0.9, exploration_rate=1):
+    def __init__(self, name, playerColor, file_path, learning_rate=0.1, discount_factor=0.9, exploration_rate=1):
         
         # needs to be moved to some other function once we create the functions to run more, just here for now
         super().__init__(name, playerColor)
@@ -14,16 +17,32 @@ class QLearningAIPlayer(player):
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.exploration_rate = exploration_rate
-        self.q_table = {}
+
+        if os.path.exists(file_path):
+            # Load the Q-table from the file
+            with open(file_path, 'rb') as f:
+                self.q_table = pickle.load(f)
+            print(f"Loaded Q-table from {file_path}")
+            #pygame.time.delay(1000)
+            
+        else:
+            # Initialize a new Q-table
+            self.q_table = {}
+            print(f"No existing Q-table found. Initialized new Q-table.")
+
         self.action_key_to_index = {}
         self.index_to_action_key = {}
 
         #Dev cards in possession
         self.newDevCards = [] #List to keep the new dev cards draw - update the main list every turn
-        self.devCards = {'KNIGHT':0, 'VP':0, 'MONOPOLY':0, 'ROADBUILDER':0, 'YEAROFPLENTY':0} 
+        self.devCards = {'KNIGHT':0, 'VP':0, 'MONOPOLY':0, 'YEAROFPLENTY':0} 
+        #self.devCards = {'KNIGHT':0, 'VP':0, 'MONOPOLY':0, 'ROADBUILDER':0, 'YEAROFPLENTY':0} 
         self.devCardPlayedThisTurn = False
 
         self.visibleVictoryPoints = self.victoryPoints - self.devCards['VP']
+
+    def get_name(self):
+        return self.name
 
     # This is currently taken from the heuristic so its random, need to fix
     def updateAI(self): 
@@ -158,20 +177,9 @@ class QLearningAIPlayer(player):
         self.q_table[state_key][action] += self.learning_rate * td_delta
 
     def choose_action(self, state, board, robber=False, road_only=False):
-        if robber:
-            robber_spots = board.get_robber_spots()
-            possible_actions = self.get_robber_commands(robber_spots, board)
-            action_keys = list(possible_actions.keys())
-
-        elif road_only:
-            possible_roads = board.get_potential_roads(self)
-            road_commands = self.get_road_build_commands(possible_roads)
-            action_keys = list(road_commands.keys())
-
-        else:
-            possible_actions = self.get_possible_actions(board)
-            action_keys = list(possible_actions.keys())
-            self.update_action_mappings(action_keys)
+        possible_actions = self.get_possible_actions(board)
+        action_keys = list(possible_actions.keys())
+        self.update_action_mappings(action_keys)
         
         # Convert the state to a tuple for use as a key in the Q-table
         state_key = tuple(state)
@@ -346,8 +354,7 @@ class QLearningAIPlayer(player):
             reward -= 10
         elif game_event['type'] == 'road':
             reward += 1
-        elif game_event['type'] == 'trade':
-            reward += 1
+        
         return reward
 
 
@@ -378,8 +385,8 @@ class QLearningAIPlayer(player):
             self.play_devCard(action_value, game, board)
             reward = self.calculate_reward({'type': 'play_dev'})
         else:
-            reward = 0 
-
+            reward = -1
+        reward_dictionary[self.name].append(reward)
         next_state = self.get_state(board)
         self.update_q_table(state, action_index, reward, next_state, board)
 
@@ -475,7 +482,7 @@ class QLearningAIPlayer(player):
             
             #Loop to allow player to discard cards
             for i in range(numCardsToDiscard+1):
-                print("Player {} current resources to discard from:", self.resources)
+                #print("Player {} current resources to discard from:", self.resources)
                 
                 resourceToDiscard = max(self.resources, key=self.resources.get) #get rid of highest resource
 
@@ -488,27 +495,27 @@ class QLearningAIPlayer(player):
             return
     
 
-    def Qlearning_move_robber(self, board):
-        state = self.get_state(board)
-        robber_spots = board.get_robber_spots()
-        robbing_commands = self.get_robber_commands(robber_spots, board)
-        if not robbing_commands:
-            return
-        #print(f'rob command {robbing_commands}')
+    # def Qlearning_move_robber(self, board):
+    #     state = self.get_state(board)
+    #     robber_spots = board.get_robber_spots()
+    #     robbing_commands = self.get_robber_commands(robber_spots, board)
+    #     if not robbing_commands:
+    #         return
+    #     #print(f'rob command {robbing_commands}')
 
-        #choose rober location from action list
+    #     #choose rober location from action list
 
-        self.update_action_mappings(list(robbing_commands.keys()))
-        action_index = self.choose_action(state, board, robber=True)
-        action_key = self.index_to_action_key[action_index]
-        hexToRob_index, playerToRob = robbing_commands[action_key]
+    #     self.update_action_mappings(list(robbing_commands.keys()))
+    #     action_index = self.choose_action(state, board, robber=True)
+    #     action_key = self.index_to_action_key[action_index]
+    #     hexToRob_index, playerToRob = robbing_commands[action_key]
 
-        # Move the robber
-        self.move_robber(hexToRob_index, board, playerToRob)
+    #     # Move the robber
+    #     self.move_robber(hexToRob_index, board, playerToRob)
 
-        reward = 2  # Reward for robbing successfully
-        next_state = self.get_state(board)
-        self.update_q_table(state, action_index, reward, next_state, board)
+    #     reward = 2  # Reward for robbing successfully
+    #     next_state = self.get_state(board)
+    #     self.update_q_table(state, action_index, reward, next_state, board)
 
 
     def move_robber(self, hexIndex, board, player_robbed):
@@ -516,7 +523,21 @@ class QLearningAIPlayer(player):
         board.updateBoardGraph_robber(hexIndex)
         
         #Steal a random resource from other players
-        self.steal_resource(player_robbed)
+        if  player_robbed != None:
+            self.steal_resource(player_robbed)
+
+        return
+    
+    def heuristic_move_robber(self, board):
+        '''Function to control heuristic AI robber
+        Calls the choose_player_to_rob and move_robber functions
+        args: board object
+        '''
+        #Get the best hex and player to rob
+        hex_i, playerRobbed = self.choose_player_to_rob(board)
+
+        #Move the robber
+        self.move_robber(hex_i, board, playerRobbed)
 
         return
     
@@ -560,13 +581,19 @@ class QLearningAIPlayer(player):
                         playerToRob = playerAtVertex
                 else:
                     pass
+            # print(hexScore,maxHexScore)
+            # print(playerToRob)
+            #pygame.time.delay(1000)
+            
 
             if hexScore >= maxHexScore and playerToRob != None:
                 hexToRob_index = hex_ind
                 playerToRob_hex = playerToRob
                 maxHexScore = hexScore
-
-        return hexToRob_index, playerToRob_hex
+        if playerToRob == None:
+            return hex_ind, None
+        else:
+            return hexToRob_index, playerToRob_hex 
     
     #Return dictionary of dev cards to play
     def get_play_dev_card_commands(self):
@@ -614,19 +641,19 @@ class QLearningAIPlayer(player):
 
         # Logic for each Dev Card
         if card_name == 'KNIGHT':
-            self.Qlearning_move_robber(board)
+            self.heuristic_move_robber(board)
             self.knightsPlayed += 1 
 
-        elif card_name == 'ROADBUILDER':
-            for i in range(2):
-                self.resources['WOOD'] +=1
-                self.resources['BRICK'] +=1
-                possible_roads = board.get_potential_roads(self)
-                road_commands = self.get_road_build_commands(possible_roads)
-                road_commands_keys = list(road_commands.keys())
-                action_value = self.choose_action(state, board, road_only=True)
-                action_values = road_commands[road_commands_keys[action_value]]
-                self.build_road(action_values[0], action_values[1], board)
+        # elif card_name == 'ROADBUILDER':
+        #     for i in range(2):
+        #         self.resources['WOOD'] +=1
+        #         self.resources['BRICK'] +=1
+        #         possible_roads = board.get_potential_roads(self)
+        #         road_commands = self.get_road_build_commands(possible_roads)
+        #         road_commands_keys = list(road_commands.keys())
+        #         action_value = self.choose_action(state, board, road_only=True)
+        #         action_values = road_commands[road_commands_keys[action_value]]
+        #         self.build_road(action_values[0], action_values[1], board)
 
 
         elif card_name == 'YEAROFPLENTY':
@@ -651,8 +678,9 @@ class QLearningAIPlayer(player):
     
     def updateDevCards(self):
         for newCard in self.newDevCards:
-            self.devCards[newCard] += 1
-        self.newDevCards = []
+            if newCard != 'ROADBUILDER':
+                self.devCards[newCard] += 1
+            self.newDevCards = []
 
 
 
@@ -669,12 +697,71 @@ class QLearningAIPlayer(player):
         except FileNotFoundError:
             print("No existing Q-values file found. Starting with a new Q-table.")
 
-    def train(self, num_episodes):
-        for episode in range(num_episodes):
-            # Training logic
-            ...
-            self.save_q_values('q_values.pkl')
+    # def train(self, game_env, num_episodes):
+    #     for episode in range(num_episodes):
+    #         print(f"Starting episode {episode + 1}/{num_episodes}")
+    #         # Training logic
+    #         game_env.reset()
+    #         done = False
+    #         while not done:
+    #             ...
+
+
+    #         self.save_q_values('q_values.pkl')
 
     def play_game(self):
         # Load Q-values before starting a new game
         self.load_q_values('q_values.pkl')
+
+def train_ai_player(num_episodes, q_values_file='q_values.pkl'):
+    # Create an instance of the catanAIGame environment
+    from QLearningGame import catanAIGame
+    
+    for episode in range(num_episodes):
+        print(f"Starting episode {episode + 1}/{num_episodes}")
+
+        game_env = catanAIGame()
+
+        # Create an instance of the QLearningAIPlayer
+        #tom = QLearningAIPlayer(name='tom', playerColor='red')
+        # ai_player2 = QLearningAIPlayer(name='AI_Player', playerColor='blue')
+        # ai_player3 = QLearningAIPlayer(name='AI_Player', playerColor='green')
+
+        # Load Q-values before starting the training
+        #tom.load_q_values(q_values_file)
+        # ai_player2.load_q_values(q_values_file)
+        # ai_player3.load_q_values(q_values_file)
+        
+        # Reset the game environment for each new episode
+        game_env.__init__()
+        
+        # Set AI player to the environment's player queue
+        #tom.updateAI()
+        # ai_player2.updateAI()
+        # ai_player3.updateAI()
+        #game_env.playerQueue.put(tom)
+        # game_env.playerQueue.put(ai_player2)
+        # game_env.playerQueue.put(ai_player3)
+        
+        done = False
+        while not done:
+            for currPlayer in game_env.playerQueue.queue:
+                #if currPlayer == ai_player:
+                currPlayer.move(game_env.board, game_env)
+                
+
+                # # Check if game is over
+                # if currPlayer.victoryPoints >= game_env.maxPoints:
+                #     done = True
+                #     break
+        
+        # Save Q-values after each episode
+        print(f"Episode {episode + 1} completed. Q-values saved to {q_values_file}")
+
+    print("Training completed. Q-values saved to", q_values_file)
+
+
+# if __name__ == "__main__":
+#     num_episodes = 10
+#     train_ai_player(num_episodes=num_episodes, q_values_file='q_values.pkl')
+

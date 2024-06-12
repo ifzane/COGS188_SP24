@@ -64,7 +64,7 @@ class catanBoard(hexTile, Vertex):
         self.updatePorts() #Add the ports to the graph
 
         #Initialize DevCardStack
-        self.devCardStack = {'KNIGHT':0, 'VP':5, 'MONOPOLY':2, 'ROADBUILDER':20, 'YEAROFPLENTY':2}
+        self.devCardStack = {'KNIGHT':14, 'VP':5, 'MONOPOLY':2, 'YEAROFPLENTY':2}
 
         return None
 
