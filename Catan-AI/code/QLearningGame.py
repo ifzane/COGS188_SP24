@@ -60,11 +60,12 @@ class catanAIGame():
     #Function to initialize players + build initial settlements for players
     def build_initial_settlements(self):
         #Initialize new players with names and colors
-        playerColors = ['black', 'darkslateblue', 'magenta4', 'orange1']
+        playerColors = ['black', 'blue', 'magenta', 'orange1']
         names = ['Tom', 'Kai', 'Ian']
+        explo_rate = [0.1, 0.2, 0.3]
         for i in range(self.numPlayers):
             #playerNameInput = input("Enter AI Player {} name: ".format(i+1))
-            newPlayer = QLearningAIPlayer(names[i], playerColors[i], f'{names[i]}_q_values.pkl')
+            newPlayer = QLearningAIPlayer(names[i], playerColors[i], f'{names[i]}_q_values.pkl', exploration_rate=explo_rate[i])
             newPlayer.updateAI()
             self.playerQueue.put(newPlayer)
 
@@ -305,13 +306,13 @@ def plot_avg_reward(rewards, player):
 
 
     plt.figure(figsize=(10, 5))  
-    plt.plot(episodes, rewards, linestyle='-', color='b')
+    plt.plot(episodes, rewards, linestyle='-',color='b')
 
     # Adding title and labels
     plt.title(f'Average Rewards per Episode for AI {player}')
     plt.xlabel('Episodes')
     plt.ylabel('Average Reward')
-    plt.ylim(-5, 10)
+    plt.ylim(-10, 20)
 
     # Optional: Adding grid
     plt.grid(True)
