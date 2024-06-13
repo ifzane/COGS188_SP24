@@ -62,10 +62,10 @@ class catanAIGame():
         #Initialize new players with names and colors
         playerColors = ['black', 'blue', 'magenta', 'orange1']
         names = ['Tom', 'Kai', 'Ian']
-        explo_rate = [0.1, 0.2, 0.3]
+        diso_facto = [0.3, 0.6, 0.9]
         for i in range(self.numPlayers):
             #playerNameInput = input("Enter AI Player {} name: ".format(i+1))
-            newPlayer = QLearningAIPlayer(names[i], playerColors[i], f'{names[i]}_q_values.pkl', exploration_rate=explo_rate[i])
+            newPlayer = QLearningAIPlayer(names[i], playerColors[i], f'{names[i]}_q_values.pkl', discount_factor=diso_facto[i])
             newPlayer.updateAI()
             self.playerQueue.put(newPlayer)
 
@@ -312,7 +312,7 @@ def plot_avg_reward(rewards, player):
     plt.title(f'Average Rewards per Episode for AI {player}')
     plt.xlabel('Episodes')
     plt.ylabel('Average Reward')
-    plt.ylim(-10, 20)
+    #plt.ylim(-10, 20)
 
     # Optional: Adding grid
     plt.grid(True)

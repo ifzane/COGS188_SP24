@@ -8,7 +8,7 @@ reward_dictionary = {'Tom':[], 'Kai':[], "Ian":[]}
 
 class QLearningAIPlayer(player):
     
-    def __init__(self, name, playerColor, file_path, learning_rate=0.1, discount_factor=0.9, exploration_rate=1):
+    def __init__(self, name, playerColor, file_path, learning_rate=0.1, discount_factor=0.9, exploration_rate=0.1):
         
         # needs to be moved to some other function once we create the functions to run more, just here for now
         super().__init__(name, playerColor)
@@ -593,7 +593,7 @@ class QLearningAIPlayer(player):
         if playerToRob == None:
             return hex_ind, None
         else:
-            return hexToRob_index, playerToRob_hex 
+            return hex_ind, playerToRob_hex 
     
     #Return dictionary of dev cards to play
     def get_play_dev_card_commands(self):
