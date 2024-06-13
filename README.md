@@ -1,18 +1,18 @@
 This is the repository for the SP24 COGS 188 Final Project. We created a Q-learning agent that learned to play Catan and compared various hyperparameters in the learning process.
 
-Group Members:
 
-Tom Hocquet
-Ian Zane
-Kai Stern
+**Group Members**: 
+- Tom Hocquet
+- Ian Zane
+- Kai Stern
 
-Catan Implementation:
+**Catan Implementation**:
 
 This was implemented using an adapted version of the Catan AI developed by Karan Vombatkere. The original is accessible at the link below
 https://github.com/kvombatkere/Catan-AI
 
 
-Files:
+**Files**:
 
 Catan-AI: Folder containing the edited versions of Karan Vombatkere's Catan-AI plus our modified or implemented files
 
